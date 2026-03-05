@@ -1,0 +1,7 @@
+/*
+	
+	sea comprime(+Lista, -R) cierto si R unifica de esta manera:
+	comprime([a, a, a, b, b], R)
+	R = [(a, 3), (b, 2)]
+	
+*/
