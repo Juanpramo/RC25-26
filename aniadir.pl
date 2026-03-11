@@ -7,6 +7,5 @@
 
 */
 
-	aniadir(L1, [], L1).
 	aniadir([], L2, L2).
 	aniadir([Cab|L1], L2, [Cab|LR]):- aniadir(L1, L2, LR).  
