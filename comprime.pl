@@ -13,6 +13,11 @@
 */
 
 	comprime([], []).
-	comprime([A], (A, 1)).
+	comprime([A], [(A, 1)]).
 	comprime([C|R], [(E, N2)|L]):- comprime(R, [(E, N)|L]), E == C, N2 is N + 1. 
-	comprime([C|R], [(C, 1), (E, N)|L]):- comprime(R, [(E, N)|L]), E =\= C. 
+	comprime([C|R], [(C, 1),(E, N)|L]):- comprime(R, [(E, N)|L]), E \= C. 
+	
+	mas_veces(L, E, N):- msort(L, LS), comprime(LS, LSC), buscamax(LSC, E, N).
+	buscamax([(E, N)], E, N).
+	buscamax([(C, NC)| R], C, NC):- buscamax(R, _, NE), NC >= NE.
+	buscamax([(_, NC)| R], E, NE):- buscamax(R, E, NE), NC < NE.
