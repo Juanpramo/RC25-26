@@ -1,0 +1,189 @@
+:- load_files('req1.pl').
+:- use_module(library(clpfd)).
+:- use_module(library(pairs)).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% REQUISITOS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+requirements(Rs):-
+    Goal = class_subject_teacher_times(Class, Subject, Teacher, Number),
+    setof(req(Class,Subject,Teacher,Number), Goal, Rs0),
+    maplist(req_with_slots, Rs0, Rs).
+
+req_with_slots(R, R-Slots):-
+    R = req(_,_,_,N),
+    length(Slots,N).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% CLASES, PROFESORES Y AULAS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+classes(Classes):-
+    setof(C,
+          S^N^T^class_subject_teacher_times(C,S,T,N),
+          Classes).
+
+teachers(Teachers):-
+    setof(T,
+          S^N^C^class_subject_teacher_times(C,S,T,N),
+          Teachers).
+
+rooms(Rooms) :-
+    findall(Room,
+            room_alloc(Room,_Class,_Subject,_Session),
+            Rooms0),
+    sort(Rooms0, Rooms).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% VARIABLES DEL PROBLEMA
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+requirements_variables(Rs, Vars) :-
+
+    requirements(Rs),
+
+    pairs_slots(Rs, Vars),
+
+    slots_per_week(SPW),
+    Max #= SPW - 1,
+
+    Vars ins 0..Max,
+
+    maplist(constrain_subject, Rs),
+
+    classes(Classes),
+    maplist(constrain_class(Rs), Classes),
+
+    teachers(Teachers),
+    maplist(constrain_teacher(Rs), Teachers),
+
+    rooms(Rooms),
+    maplist(constrain_room(Rs), Rooms).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% UTILIDADES
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+pairs_slots(Ps, Vs) :-
+    pairs_values(Ps, Vs0),
+    append(Vs0, Vs).
+
+strictly_ascending(Ls) :-
+    chain(Ls, #<).
+
+slot_quotient(S, Q) :-
+    slots_per_day(SPD),
+    Q #= S // SPD.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% RESTRICCIONES DE ASIGNATURAS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+constrain_subject(
+        req(Class,Subject,_Teacher,_Num)-Slots
+    ) :-
+
+    % romper simetrías
+    strictly_ascending(Slots),
+
+    % obtener día de cada sesión
+    maplist(slot_quotient, Slots, Days0),
+
+    % acoplamientos
+    findall(F-S,
+            coupling(Class,Subject,F,S),
+            Couplings),
+
+    maplist(slots_couplings(Slots), Couplings),
+
+    % eliminar segundos elementos de acoplamientos
+    pairs_values(Couplings, Seconds0),
+    sort(Seconds0, Seconds),
+
+    list_without_nths(Days0, Seconds, Days),
+
+    % sesiones en días distintos
+    strictly_ascending(Days).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% RESTRICCIONES DE PROFESOR
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+constrain_teacher(Rs, Teacher) :-
+
+    findall(Slots,
+            member(req(_,_,Teacher,_)-Slots, Rs),
+            TeacherSlots0),
+
+    append(TeacherSlots0, TeacherSlots),
+
+    all_distinct(TeacherSlots).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% RESTRICCIONES DE CLASE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+constrain_class(Rs, Class) :-
+
+    findall(Slots,
+            member(req(Class,_,_,_)-Slots, Rs),
+            ClassSlots0),
+
+    append(ClassSlots0, ClassSlots),
+
+    all_distinct(ClassSlots).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% RESTRICCIONES DE AULA
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+constrain_room(Rs, Room) :-
+
+    findall(Var,
+            room_variable(Room, Rs, Var),
+            Vars),
+
+    all_distinct(Vars).
+
+room_variable(Room, Rs, Var) :-
+
+    room_alloc(Room, Class, Subject, Session),
+
+    member(req(Class,Subject,_,_)-Slots, Rs),
+
+    nth1(Session, Slots, Var).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% ACOPLAMIENTOS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+slots_couplings(Slots, F-S) :-
+
+    nth1(F, Slots, X),
+    nth1(S, Slots, Y),
+
+    Y #= X + 1.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% ELIMINAR POSICIONES DE UNA LISTA
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+list_without_nths(List, Nths, Result) :-
+
+    findall(Elem,
+        (
+            nth1(Pos,List,Elem),
+            \+ member(Pos,Nths)
+        ),
+        Result).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% BÚSQUEDA DE SOLUCIÓN
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+schedule(Rs) :-
+
+    requirements_variables(Rs, Vars),
+
+    labeling([ffc], Vars).
